@@ -48,7 +48,7 @@ You can also check your browser and hardware compatibility at [WebGPU Report](ht
 
 ## Live Demo
 
-Check out the [demo](https://stackblitz.com/~/github.com/spleennooname/webgpu-blob) to see the experiment in action.
+Check out the [demo](https://webgpu-blob.netlify.app/) to see the experiment in action.
 
 ## License
 
