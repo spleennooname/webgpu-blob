@@ -1,6 +1,8 @@
 
 # webgpu-blob
 
+![image](./webgpu.jpeg)
+
 This repository contains an experiment built with WebGPU and WGSL (WebGPU Shading Language).
 
 ## Browser Setup for WebGPU
