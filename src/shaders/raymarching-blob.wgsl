@@ -8,7 +8,7 @@ struct VertexOutput {
 
 @vertex
 fn vertexMain(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
-     // quad triangle
+     // simple quad (big)triangle
     var pos = array<vec2f, 3>(
         vec2f(-1.0, -1.0),
         vec2f(3.0, -1.0),
@@ -19,7 +19,7 @@ fn vertexMain(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
 
     var vertex: VertexOutput;
     vertex.position = vec4f(p, 0.0, 1.0);
-    vertex.uv = p; // p* 0.5 + 0.5 Normalizza le coordinate UV
+    vertex.uv = p;
 
     return vertex;
 }
@@ -39,18 +39,12 @@ const DIFFUSE: vec3<f32> = vec3<f32>(1.0, 0.0, 0.0);
 const SPECULAR: vec3<f32> = vec3<f32>(1.0, 1.0, 1.0);
 const SHININESS: f32 = 8.0;
 
-fn map(p: vec3<f32>) -> f32 {
-    let t = twist(p, time);
-    let rot_mat = rotationMatrix3(vec3<f32>(0.0, 1.0, 1.0), time);
-    let r = rotate(t, rot_mat);
-    return torus(r, vec2<f32>(0.4, 0.4));
-}
-
 fn torus(p: vec3<f32>, t: vec2<f32>) -> f32 {
     let q = vec2<f32>(length(p.xz) - t.x, p.y);
     return length(q) - t.y;
 }
       
+// some twist fun wih vec3f p      
 fn twist(p: vec3<f32>, time: f32) -> vec3<f32> {
     let timeVal = sin(time * 0.5) * 3.0 * p.y;
     let c = cos(sin(time * 2.0) * 2.2 * p.y);
@@ -59,32 +53,55 @@ fn twist(p: vec3<f32>, time: f32) -> vec3<f32> {
     return vec3<f32>(m * p.xz, p.y);
 }
 
+//
 fn rotationMatrix3(axis: vec3<f32>, angle: f32) -> mat3x3<f32> {
-    let axis_norm = normalize(axis);
+    // early return for zero axis to avoid normalization issues
+    if dot(axis, axis) < 1e-10 {
+        return mat3x3<f32>(
+            1.0, 0.0, 0.0,
+            0.0, 1.0, 0.0,
+            0.0, 0.0, 1.0
+        );
+    }
+
+    let n = normalize(axis);
     let s = sin(angle);
     let c = cos(angle);
     let oc = 1.0 - c;
-        
-        // Direct construction of mat3x3 without conversions
+    
+    // precompute common terms
+    let nx_ny = n.x * n.y;
+    let nx_nz = n.x * n.z;
+    let ny_nz = n.y * n.z;
+    let nx_s = n.x * s;
+    let ny_s = n.y * s;
+    let nz_s = n.z * s;
+
+    // construct matrix with clearer row organization
     return mat3x3<f32>(
-        oc * axis_norm.x * axis_norm.x + c,
-        oc * axis_norm.x * axis_norm.y + axis_norm.z * s,
-        oc * axis_norm.z * axis_norm.x - axis_norm.y * s,
-        oc * axis_norm.x * axis_norm.y - axis_norm.z * s,
-        oc * axis_norm.y * axis_norm.y + c,
-        oc * axis_norm.y * axis_norm.z + axis_norm.x * s,
-        oc * axis_norm.z * axis_norm.x + axis_norm.y * s,
-        oc * axis_norm.y * axis_norm.z - axis_norm.x * s,
-        oc * axis_norm.z * axis_norm.z + c
+        // Row 1
+        oc * n.x * n.x + c,
+        oc * nx_ny + nz_s,
+        oc * nx_nz - ny_s,
+        // Row 2
+        oc * nx_ny - nz_s,
+        oc * n.y * n.y + c,
+        oc * ny_nz + nx_s,
+        // Row 3
+        oc * nx_nz + ny_s,
+        oc * ny_nz - nx_s,
+        oc * n.z * n.z + c
     );
 }
 
-fn rotate(p: vec3<f32>, m: mat3x3<f32>) -> vec3<f32> {
-  return m * p;
+// sdf scene/map fn
+fn map(p: vec3<f32>) -> f32 {
+    let t: vec3<f32> = twist(p, time);
+    let rotMat: mat3x3<f32> = rotationMatrix3(vec3<f32>(0.0, 1.0, 1.0), time);
+    return torus(t * rotMat, vec2<f32>(0.4, 0.4));
 }
 
-// Ray marching
-
+// compute normal with classic formula
 fn normal(p: vec3<f32>) -> vec3<f32> {
     let e = vec2<f32>(EPSILON, 0.0);
     return normalize(vec3<f32>(
@@ -94,6 +111,7 @@ fn normal(p: vec3<f32>) -> vec3<f32> {
     ));
 }
 
+// raymarching with ray origin + ray direction
 fn trace(ro: vec3f, rd: vec3f) -> f32 {
   var t: f32 = 0.0;
   var d: f32 = 0.0;
@@ -104,6 +122,7 @@ fn trace(ro: vec3f, rd: vec3f) -> f32 {
     }
     t = t+ d ;
   }
+
   return t;
 }
 
@@ -122,11 +141,10 @@ fn fragmentMain(frag: FragmentInput) -> @location(0) vec4f {
     let screenPos = vec2f(frag.uv.x * aspect, frag.uv.y);
         
     // ray origin
-    let ro = vec3f(0.0, 0.0, -2.0); // Ray origin / camera position
-    
+    let ro = vec3f(0.0, 0.0, -1.5); 
     let lookAt = vec3f(0.0, 0.0, 0.0);
    
-    // camera
+    // offset for camera
     let cameraOffset = vec3f(
         sin(time * 0.5) * 0.5,
         sin(time * 0.3) * 0.3,
@@ -135,41 +153,41 @@ fn fragmentMain(frag: FragmentInput) -> @location(0) vec4f {
 
     let forward = normalize(lookAt - ro + cameraOffset);
     let right = normalize(cross(forward,  vec3f(0.0, 1.0, 0.0)));
-    //let cameraUp = cross(right, forward);
-    
+
     // ray direction
     let rd = normalize(forward + 1.0 * (screenPos.x * right + screenPos.y * cross(right, forward)));
 
-    let lp1 = vec3<f32>(4.0 * sin(time), 2.0, 4.0 * cos(time));
-    let lp2 = vec3<f32>(4.0 * sin(time), 2.0, 5.0 * sin(time));
-
-    let intensity1 = vec3<f32>(0.4);
-    let intensity2 = vec3<f32>(0.2);
-
+    // computer ray distance
     let d = trace(ro + cameraOffset, rd);
 
     var c = vec3f(0);
 
-    if (d < MAX_DISTANCE) {
+    if (d < MAX_DISTANCE) { // hit somethin
 
       let p = ro + d * rd;
 
+      // get normal
       let no = normal(p);
             
-      // lighting
+      // light direction
       let ld = vec3f(1.0, 1.0, -1.0);
-      let lp = vec3f(-1.0, -1.0, -1.0)* sin(time);
 
-      let ldd = length(lp - p);
-      let attn = 1.0 - pow(min(1.0, ldd/16.0), 2.0); // attenuation
+      // light point
+      let lp = vec3f(-1.0, -1.0, -1.0) * sin(time);
+
+      // diffuse
       let dif=  max(dot(no, ld), 0.0);
-      let fr = pow(1.0 - abs(dot(no,rd)), 2.0); // fresnel
-      let sp = pow(max(0., dot(reflect(-ld, no), -rd)), 15.); //specular
+      // fresnel
+      let fr = pow(1.0 - abs(dot(no,rd)), 2.0); 
+      // specular
+      let sp = pow(max(0., dot(reflect(-ld, no), -rd)), SHININESS); 
 
-      c = mix(vec3f(0.5)*(dif + sp* 1e-4)* attn, vec3f(0.1, 0.4, 0.8), min(fr, 0.2));
+      c = mix(vec3f(0.5)*(dif + sp* 1e-4), vec3f(0.1, 0.4, 0.8), min(fr, 0.2));
     }
 
+    // +: gradient bg color
     c += mix(vec3f(0.5, 0.7, 1.0), vec3f(0.1, 0.1, 0.3),  rd.y * 0.5 + 0.5);
 
+    // final color
     return vec4f(c, 1.0);
 }
