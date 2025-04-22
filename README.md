@@ -64,7 +64,7 @@ You are free to:
 - Adapt — remix, transform, and build upon the material
 
 Under these conditions:
-- You must provide proper attribution to [YOUR NAME] as the original creator
+- You must provide proper attribution to Andrea Bovo as the original creator
 - You cannot use the material for commercial purposes
 - No additional restrictions — You may not apply legal terms or technological measures that legally restrict others from doing anything the license permits
 
