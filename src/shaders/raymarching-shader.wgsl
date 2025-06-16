@@ -40,23 +40,11 @@ const DIFFUSE: vec3<f32> = vec3<f32>(1.0, 0.0, 0.0);
 const SPECULAR: vec3<f32> = vec3<f32>(1.0, 1.0, 1.0);
 const SHININESS: f32 = 8.0;
 
-fn torus(p: vec3<f32>, t: vec2<f32>) -> f32 {
-    let q = vec2<f32>(length(p.xz) - t.x, p.y);
-    return length(q) - t.y;
-}
-      
-// some twist fun wih vec3f p      
-fn twist(p: vec3<f32>, time: f32) -> vec3<f32> {
-    let timeVal = sin(time * 0.5) * 3.0 * p.y;
-    let c = cos(sin(time * 2.0) * 2.2 * p.y);
-    let s = sin(timeVal);
-    let m = mat2x2<f32>(c, s, -s, c);
-    return vec3<f32>(m * p.xz, p.y);
-}
+const PHI: f32 = 1.618033988749895; // golden ratio
 
 //
 fn rotationMatrix3(axis: vec3<f32>, angle: f32) -> mat3x3<f32> {
-    // early return for zero axis to avoid normalization issues
+    // Early return
     if dot(axis, axis) < 1e-10 {
         return mat3x3<f32>(
             1.0, 0.0, 0.0,
@@ -70,7 +58,7 @@ fn rotationMatrix3(axis: vec3<f32>, angle: f32) -> mat3x3<f32> {
     let c = cos(angle);
     let oc = 1.0 - c;
     
-    // precompute common terms
+    // precomputation
     let nx_ny = n.x * n.y;
     let nx_nz = n.x * n.z;
     let ny_nz = n.y * n.z;
@@ -78,29 +66,48 @@ fn rotationMatrix3(axis: vec3<f32>, angle: f32) -> mat3x3<f32> {
     let ny_s = n.y * s;
     let nz_s = n.z * s;
 
-    // construct matrix with clearer row organization
+    // matrix for columns (WGSL is column-major)
     return mat3x3<f32>(
-        // Row 1
-        oc * n.x * n.x + c,
-        oc * nx_ny + nz_s,
-        oc * nx_nz - ny_s,
-        // Row 2
-        oc * nx_ny - nz_s,
-        oc * n.y * n.y + c,
-        oc * ny_nz + nx_s,
-        // Row 3
-        oc * nx_nz + ny_s,
-        oc * ny_nz - nx_s,
-        oc * n.z * n.z + c
+        vec3<f32>(oc * n.x * n.x + c, oc * nx_ny + nz_s, oc * nx_nz - ny_s),
+        vec3<f32>(oc * nx_ny - nz_s, oc * n.y * n.y + c, oc * ny_nz + nx_s),
+        vec3<f32>(oc * nx_nz + ny_s, oc * ny_nz - nx_s, oc * n.z * n.z + c)
     );
+}
+
+// sdf torus
+fn torus(p: vec3<f32>, t: vec2<f32>) -> f32 {
+    let q = vec2<f32>(length(p.xz) - t.x, p.y);
+    return length(q) - t.y;
+}
+
+// SDF RoundBox
+fn sdRoundBox(p: vec3<f32>, b: vec3<f32>, r: f32) -> f32 {
+    let q = abs(p) - b;
+    return length(max(q, vec3<f32>(0.0))) + min(max(q.x, max(q.y, q.z)), 0.0) - r;
+}
+
+// some twist fun wih vec3f p      
+fn twist(p: vec3<f32>, time: f32) -> vec3<f32> {
+    let k = sin(time * 0.5) * 0.9; // Twist amount
+    let c = cos(k * p.y);
+    let s = sin(k * p.y);
+    let m = mat2x2<f32>(c, -s, s, c);
+    return vec3<f32>(m * p.xz, p.y);
 }
 
 // sdf scene/map fn
 fn map(p: vec3<f32>) -> f32 {
+
     let t: vec3<f32> = twist(p, time);
+
     let rotMat: mat3x3<f32> = rotationMatrix3(vec3<f32>(0.0, 1.0, 1.0), time);
-    return torus(t * rotMat, vec2<f32>(0.4, 0.4));
+    
+    // sdf shape
+    let sdf = sdRoundBox(rotMat * t, vec3<f32>(0.3, 0.3, 0.3), 0.1);
+
+    return sdf;
 }
+
 
 // compute normal (classic)
 fn normal(p: vec3<f32>) -> vec3<f32> {
@@ -148,13 +155,13 @@ fn fragmentMain(frag: FragmentInput) -> @location(0) vec4f {
    
     // offset for camera
     let cameraOffset = vec3f(
-        sin(time * 0.5) * 0.5,
-        sin(time * 0.3) * 0.3,
+        sin(time * 0.5) * 0.2,
+        sin(time * 0.5) * 0.2,
         0.0
     );
 
     let forward = normalize(lookAt - ro + cameraOffset);
-    let right = normalize(cross(forward,  vec3f(0.0, 1.0, 0.0)));
+    let right = normalize(cross(forward,  vec3f(0.0, 1.0, 1.0)));
 
     // ray direction
      let aspect = resolution.x / resolution.y;
@@ -175,10 +182,10 @@ fn fragmentMain(frag: FragmentInput) -> @location(0) vec4f {
       let no = normal(p);
             
       // light direction
-      let ld = vec3f(1.0, 1.0, -1.0);
+      let ld = vec3f(1.0, -1.0, -1.0);
 
       // light point
-      let lp = vec3f(-1.0, -1.0, -1.0) * sin(time);
+      let lp = vec3f(-1.0, 0.0, 1.0);// * sin(time);
 
       // diffuse
       let dif=  vec3f(0.8, 0.4, 0.0) * max(dot(no, ld), 0.0);
@@ -187,7 +194,7 @@ fn fragmentMain(frag: FragmentInput) -> @location(0) vec4f {
       // specular
       let sp = pow(max(0., dot(reflect(-ld, no), -rd)), SHININESS); 
 
-      c = mix(vec3f(1.0)*(dif + sp* 1e-4), vec3f(0.8, 0.4, 0.0), min(fr, 0.1));
+      c = mix(vec3f(1.)*(dif + sp* 1e-4), vec3f(0.8, 0.4, 0.0), min(fr, 0.2));
     }
 
     // +: gradient bg color
@@ -197,7 +204,7 @@ fn fragmentMain(frag: FragmentInput) -> @location(0) vec4f {
         rd.y * 0.5 + 0.5
     );
 
-    let decay = vec3f(0.98, 0.90, 0.99);
+    let decay = vec3f(0.98, 0.97, 0.99);
     c = mix(c, prevColor.rgb * decay, 0.75);
 
     // final color

@@ -1,6 +1,6 @@
 import './style.css';
 
-import blobShader from './shaders/raymarching-blob.wgsl?raw';
+import blobShader from './shaders/raymarching-shader.wgsl?raw';
 import copyShader from './shaders/copy-shader.wgsl?raw';
 
 async function init() {
@@ -236,7 +236,6 @@ async function init() {
     });
   }
 
-  let startTime = performance.now();
 
   let fps = 0;
   let fpsTime = 0;
@@ -251,7 +250,7 @@ async function init() {
       fps = fpsCount;
       fpsCount = 0;
       fpsTime = time;
-      document.getElementById('fps').textContent = fps;
+      document.getElementById('fps').textContent = `${fps}fps`;
     }
 
     // update time
