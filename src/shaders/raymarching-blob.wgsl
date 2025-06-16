@@ -1,4 +1,3 @@
-
 // vertex shader
 
 struct VertexOutput {
@@ -19,7 +18,7 @@ fn vertexMain(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
 
     var vertex: VertexOutput;
     vertex.position = vec4f(p, 0.0, 1.0);
-    vertex.uv = p;
+    vertex.uv = vec2f(p.x, -p.y);
 
     return vertex;
 }
@@ -28,8 +27,10 @@ fn vertexMain(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
 
 @group(0) @binding(0) var<uniform> time: f32;
 @group(0) @binding(1) var<uniform> resolution: vec2f;
+@group(0) @binding(2) var prevFrame: texture_2d<f32>;
+@group(0) @binding(3) var frameSampler: sampler;
 
-const MAX_STEPS: f32 = 128.0;
+const MAX_STEPS: f32 = 96.0;
 const MIN_DISTANCE: f32 = 0.0;
 const MAX_DISTANCE: f32 = 100.0;
 const EPSILON: f32 = 0.0001;
@@ -101,7 +102,7 @@ fn map(p: vec3<f32>) -> f32 {
     return torus(t * rotMat, vec2<f32>(0.4, 0.4));
 }
 
-// compute normal with classic formula
+// compute normal (classic)
 fn normal(p: vec3<f32>) -> vec3<f32> {
     let e = vec2<f32>(EPSILON, 0.0);
     return normalize(vec3<f32>(
@@ -135,11 +136,12 @@ struct FragmentInput {
 @fragment
 fn fragmentMain(frag: FragmentInput) -> @location(0) vec4f {
     
-    // normalize uv on fragment
+    // normalize uv on fragment -1 +1
     let uv = frag.uv * 0.5 + 0.5;
-    let aspect = resolution.x / resolution.y;
-    let screenPos = vec2f(frag.uv.x * aspect, frag.uv.y);
-        
+    
+    // prev frame
+    let prevColor = textureSample(prevFrame, frameSampler, uv);
+
     // ray origin
     let ro = vec3f(0.0, 0.0, -1.5); 
     let lookAt = vec3f(0.0, 0.0, 0.0);
@@ -155,6 +157,9 @@ fn fragmentMain(frag: FragmentInput) -> @location(0) vec4f {
     let right = normalize(cross(forward,  vec3f(0.0, 1.0, 0.0)));
 
     // ray direction
+     let aspect = resolution.x / resolution.y;
+    let screenPos = vec2f(frag.uv.x * aspect, frag.uv.y);
+       
     let rd = normalize(forward + 1.0 * (screenPos.x * right + screenPos.y * cross(right, forward)));
 
     // computer ray distance
@@ -176,17 +181,24 @@ fn fragmentMain(frag: FragmentInput) -> @location(0) vec4f {
       let lp = vec3f(-1.0, -1.0, -1.0) * sin(time);
 
       // diffuse
-      let dif=  max(dot(no, ld), 0.0);
+      let dif=  vec3f(0.8, 0.4, 0.0) * max(dot(no, ld), 0.0);
       // fresnel
       let fr = pow(1.0 - abs(dot(no,rd)), 2.0); 
       // specular
       let sp = pow(max(0., dot(reflect(-ld, no), -rd)), SHININESS); 
 
-      c = mix(vec3f(0.5)*(dif + sp* 1e-4), vec3f(0.1, 0.4, 0.8), min(fr, 0.2));
+      c = mix(vec3f(1.0)*(dif + sp* 1e-4), vec3f(0.8, 0.4, 0.0), min(fr, 0.1));
     }
 
     // +: gradient bg color
-    c += mix(vec3f(0.5, 0.7, 1.0), vec3f(0.1, 0.1, 0.3),  rd.y * 0.5 + 0.5);
+    c += mix(
+        vec3f(0.5, 0.7, 1.0), 
+        vec3f(0.1, 0.1, 0.3),  
+        rd.y * 0.5 + 0.5
+    );
+
+    let decay = vec3f(0.98, 0.90, 0.99);
+    c = mix(c, prevColor.rgb * decay, 0.75);
 
     // final color
     return vec4f(c, 1.0);
