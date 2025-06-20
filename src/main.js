@@ -243,7 +243,7 @@ async function init() {
   // render
   function render(time) {
 
-    time*=1e-3;
+    time *= 1e-3;
 
     fpsCount++;
     if (time - fpsTime > 1) {
@@ -278,7 +278,7 @@ async function init() {
     pingPongPass.draw(3);
     pingPongPass.end();
 
-    // copy pass
+    // copy pass: to screen
     const copyBindGroup = createCopyBindGroup(pingPongViews[currentBuffer]);
 
     const copyPass = commandEncoder.beginRenderPass({
@@ -298,7 +298,7 @@ async function init() {
 
     device.queue.submit([commandEncoder.finish()]);
 
-    // Scambia i buffer
+    // swap buffers
     currentBuffer = 1 - currentBuffer;
 
     // next frame
@@ -317,7 +317,7 @@ async function init() {
     const resolutionArray = new Float32Array([width, height]);
     device.queue.writeBuffer(resolutionBuffer, 0, resolutionArray);
 
-    // Ricrea le texture ping pong con le nuove dimensioni
+    // create ping-pong textures
     if (pingPongTextures) {
       
       pingPongTextures[0].destroy();

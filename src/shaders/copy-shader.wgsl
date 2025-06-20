@@ -35,15 +35,10 @@ fn fragmentMain(frag: FragmentInput) -> @location(0) vec4f {
     
     var color = textureSample(inputTexture, textureSampler, uv);
     
-    // post-processing
+    // postfx
     let dist = length(uv - 0.5);
-    let vignette = 1.0 - smoothstep(0.5, 0.8, dist) * 0.5;
+    let vignette = 1.0 - smoothstep(0.2, 0.9, dist) * 0.5;
     color = color * vignette;
-    
-    // color grading
-    color.r = pow(color.r, 0.98);
-    color.g = pow(color.g, 0.99);
-    color.b = pow(color.b, 1.01);
     
     // scanlines
     //let scanline = sin(uv.y * 800.0 + time * 2.0) * 0.04;

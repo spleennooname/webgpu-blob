@@ -1,4 +1,3 @@
-// vertex shader
 
 struct VertexOutput {
   @builtin(position) position: vec4f,
@@ -30,6 +29,7 @@ fn vertexMain(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
 @group(0) @binding(2) var prevFrame: texture_2d<f32>;
 @group(0) @binding(3) var frameSampler: sampler;
 
+const PI =  3.14159265359 ;
 const MAX_STEPS: f32 = 96.0;
 const MIN_DISTANCE: f32 = 0.0;
 const MAX_DISTANCE: f32 = 100.0;
@@ -38,7 +38,6 @@ const EPSILON: f32 = 0.0001;
 const AMBIENT: vec3<f32> = vec3<f32>(1.0, 0.4, 1.0) * 0.25;
 const DIFFUSE: vec3<f32> = vec3<f32>(1.0, 0.0, 0.0);
 const SPECULAR: vec3<f32> = vec3<f32>(1.0, 1.0, 1.0);
-const SHININESS: f32 = 8.0;
 
 const PHI: f32 = 1.618033988749895; // golden ratio
 
@@ -74,12 +73,6 @@ fn rotationMatrix3(axis: vec3<f32>, angle: f32) -> mat3x3<f32> {
     );
 }
 
-// sdf torus
-fn torus(p: vec3<f32>, t: vec2<f32>) -> f32 {
-    let q = vec2<f32>(length(p.xz) - t.x, p.y);
-    return length(q) - t.y;
-}
-
 // SDF RoundBox
 fn sdRoundBox(p: vec3<f32>, b: vec3<f32>, r: f32) -> f32 {
     let q = abs(p) - b;
@@ -88,26 +81,26 @@ fn sdRoundBox(p: vec3<f32>, b: vec3<f32>, r: f32) -> f32 {
 
 // some twist fun wih vec3f p      
 fn twist(p: vec3<f32>, time: f32) -> vec3<f32> {
-    let k = sin(time * 0.5) * 0.9; // Twist amount
+    let k = sin(time * 1.5) * 2.; // Twist amount
     let c = cos(k * p.y);
     let s = sin(k * p.y);
     let m = mat2x2<f32>(c, -s, s, c);
     return vec3<f32>(m * p.xz, p.y);
 }
 
+fn modf(x: f32, y: f32) -> f32 {
+    return x - y * floor(x / y);
+}
+
 // sdf scene/map fn
 fn map(p: vec3<f32>) -> f32 {
-
-    let t: vec3<f32> = twist(p, time);
-
     let rotMat: mat3x3<f32> = rotationMatrix3(vec3<f32>(0.0, 1.0, 1.0), time);
     
-    // sdf shape
-    let sdf = sdRoundBox(rotMat * t, vec3<f32>(0.3, 0.3, 0.3), 0.1);
+    // SDF 
+    let sdf = sdRoundBox(rotMat * twist(p, time), vec3<f32>(0.3, 0.3, 0.3), 0.1);
 
     return sdf;
 }
-
 
 // compute normal (classic)
 fn normal(p: vec3<f32>) -> vec3<f32> {
@@ -134,7 +127,7 @@ fn trace(ro: vec3f, rd: vec3f) -> f32 {
   return t;
 }
 
-// fragment shader
+
 
 struct FragmentInput {
   @location(0) uv: vec2f, // same location(n), see VertexOutput
@@ -150,13 +143,13 @@ fn fragmentMain(frag: FragmentInput) -> @location(0) vec4f {
     let prevColor = textureSample(prevFrame, frameSampler, uv);
 
     // ray origin
-    let ro = vec3f(0.0, 0.0, -1.5); 
+    let ro = vec3f(0.0, 0.0, 1.0); 
     let lookAt = vec3f(0.0, 0.0, 0.0);
    
     // offset for camera
     let cameraOffset = vec3f(
-        sin(time * 0.5) * 0.2,
-        sin(time * 0.5) * 0.2,
+        sin(time * 0.5) * 0.1,
+        sin(time * 0.5) * 0.1,
         0.0
     );
 
@@ -172,7 +165,11 @@ fn fragmentMain(frag: FragmentInput) -> @location(0) vec4f {
     // computer ray distance
     let d = trace(ro + cameraOffset, rd);
 
-    var c = vec3f(0);
+    var c = mix(
+            vec3f(0.5, 0.7, 1.0), 
+            vec3f(0.3, 0.15, 0.4),  
+            rd.y * 0.5 + 0.5
+        );
 
     if (d < MAX_DISTANCE) { // hit somethin
 
@@ -180,32 +177,36 @@ fn fragmentMain(frag: FragmentInput) -> @location(0) vec4f {
 
       // get normal
       let no = normal(p);
-            
+      //return vec4f(no * 0.5 + 0.5, 1.0); // normals debug in [0, 1]
+      
       // light direction
-      let ld = vec3f(1.0, -1.0, -1.0);
+      let ld = vec3f(-.5, .5, 0.8);
 
       // light point
-      let lp = vec3f(-1.0, 0.0, 1.0);// * sin(time);
+      let lp = vec3f(0.0, 0.3, 1.0);
 
       // diffuse
-      let dif=  vec3f(0.8, 0.4, 0.0) * max(dot(no, ld), 0.0);
+      let dif=  max(dot(no, ld), 0.0);
+
       // fresnel
-      let fr = pow(1.0 - abs(dot(no,rd)), 2.0); 
+      let fr =  vec3f(0.8, 0.4, 0.) * pow(1.0 - abs(dot(no,rd)), 4.); 
+
       // specular
-      let sp = pow(max(0., dot(reflect(-ld, no), -rd)), SHININESS); 
+      let sp = vec3f(0.8, 0.4, 0.) * pow(max(0., dot(reflect(-ld, no), -rd)), 32.); 
 
-      c = mix(vec3f(1.)*(dif + sp* 1e-4), vec3f(0.8, 0.4, 0.0), min(fr, 0.2));
-    }
+      //
+      let sss = smoothstep(0.,1.,map(p + ld*.4)/.4);
 
-    // +: gradient bg color
-    c += mix(
-        vec3f(0.5, 0.7, 1.0), 
-        vec3f(0.1, 0.1, 0.3),  
-        rd.y * 0.5 + 0.5
-    );
+      let albedo = vec3f(0.8, 0.4, 0.);
+  
+      let ao = clamp(map(p + no*.05)/.05, 0. ,1.); // AO = AMBIENT OCCLUSION
 
-    let decay = vec3f(0.98, 0.97, 0.99);
-    c = mix(c, prevColor.rgb * decay, 0.75);
+       // dif + spec
+      c = mix(sp + albedo * (ao + .2) * (dif + sss * .2), c, min(fr, vec3f(0.3)));
+    } 
+
+    let decay = vec3f(1., 0.98, 0.97);
+    c = mix(c, prevColor.rgb * decay, 0.87);
 
     // final color
     return vec4f(c, 1.0);
