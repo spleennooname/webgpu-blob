@@ -4,6 +4,7 @@ import blobShader from './shaders/raymarching-shader.wgsl?raw';
 import copyShader from './shaders/copy-shader.wgsl?raw';
 
 async function init() {
+  // basic WebGPU availability check
   if (!navigator.gpu) {
     console.error('WebGPU not supported');
     return;
@@ -15,13 +16,16 @@ async function init() {
     return;
   }
 
+  // get the device and set up canvas context
   const device = await adapter.requestDevice();
   const canvas = document.getElementById('canvas');
   const context = canvas.getContext('webgpu');
-  const size = [512, 512];
+  const size = [512, 512]; // initial render size
 
   const format = navigator.gpu.getPreferredCanvasFormat();
 
+  // helper function to create textures for ping-pong rendering
+  // these textures can be used as both render targets and sampling sources
   function createPingPongTexture(device, width, height, format) {
     return device.createTexture({
       size: [width, height, 1],
@@ -30,6 +34,7 @@ async function init() {
     });
   }
 
+  // configure the canvas context for WebGPU rendering
   context.configure({
     device,
     size,
@@ -37,38 +42,41 @@ async function init() {
     alphaMode: 'opaque',
   });
 
-  // Crea le texture per ping pong buffering
+  // create two textures for ping-pong buffering - this allows temporal effects
+  // by reading from previous frame while writing to current frame
   let pingPongTextures = [
     createPingPongTexture(device, size[0], size[1], format),
     createPingPongTexture(device, size[0], size[1], format)
   ];
 
+  // create texture views for binding to shaders
   let pingPongViews = [
     pingPongTextures[0].createView(),
     pingPongTextures[1].createView()
   ];
 
-  let currentBuffer = 0;
+  let currentBuffer = 0; // tracks which buffer we're currently rendering to
 
-  // shader module
+  // load the main raymarching shader
   const shaderModule = device.createShaderModule({
     label: "Raymarching Shader",
     code: blobShader,
   });
 
-  /*  device.popErrorScope().then(async error => {
+  /* commented out error handling code - useful for shader debugging
+  device.popErrorScope().then(async error => {
     if (error) {
       const info = await shaderModule.getCompilationInfo();
  
-      // Split the code into lines
+      // split the code into lines
       const lines = code.split('\n');
  
-      // Sort the messages by line numbers in reverse order
+      // sort the messages by line numbers in reverse order
       // so that as we insert the messages they won't affect
       // the line numbers.
       const msgs = [...info.messages].sort((a, b) => b.lineNum - a.lineNum);
  
-      // Insert the error messages between lines
+      // insert the error messages between lines
       for (const msg of msgs) {
         lines.splice(msg.lineNum, 0,
           `${''.padEnd(msg.linePos - 1)}${''.padEnd(msg.length, '^')}`,
@@ -80,7 +88,9 @@ async function init() {
     }
   }); */
 
-  // pipeline layout, bind 2 uniforms on fragment
+  // define the bind group layout for the main raymarching pipeline
+  // binding 0: time uniform, binding 1: resolution uniform
+  // binding 2: previous frame texture, binding 3: sampler
   const blobPipelineLayout = device.createPipelineLayout({
     bindGroupLayouts: [
       device.createBindGroupLayout({
@@ -95,7 +105,6 @@ async function init() {
             visibility: GPUShaderStage.FRAGMENT,
             buffer: { type: 'uniform' },
           },
-          // 
           {
             binding: 2,
             visibility: GPUShaderStage.FRAGMENT,
@@ -111,7 +120,7 @@ async function init() {
     ],
   });
 
-  //  blob pipeline
+  // create the main rendering pipeline for raymarching
   const blobPipeline = await device.createRenderPipelineAsync({
     layout: blobPipelineLayout,
     vertex: {
@@ -124,11 +133,12 @@ async function init() {
       targets: [{ format }],
     },
     primitive: {
-      topology: 'triangle-list',
+      topology: 'triangle-list', // fullscreen triangle approach
     },
   });
 
-  // Pipeline separata per copiare alla canvas finale
+  // separate pipeline for copying the final result to canvas
+  // this is a common pattern to keep the main rendering separate from display
   const copyPipelineLayout = device.createPipelineLayout({
     bindGroupLayouts: [
       device.createBindGroupLayout({
@@ -148,11 +158,13 @@ async function init() {
     ],
   });
 
+  // load the simple copy shader
   const copyShaderModule = device.createShaderModule({
     label: 'Passthrough Shader',
     code: copyShader
   });
 
+  // create the copy pipeline - just blits texture to screen
   const copyPipeline = await device.createRenderPipelineAsync({
     layout: copyPipelineLayout,
     vertex: {
@@ -169,19 +181,19 @@ async function init() {
     },
   });
 
-  // time buffer
+  // uniform buffer for time - essential for animated raymarching
   const timeBuffer = device.createBuffer({
-    size: 4, // Float32 -4 bytes
+    size: 4, // float32 - 4 bytes
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
 
-  // resolution buffer
+  // uniform buffer for resolution - needed for proper UV coordinates
   const resolutionBuffer = device.createBuffer({
-    size: 8, // 2 x Float32 (longword) ( width and height)
+    size: 8, // 2 x float32 (width and height)
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
 
-  // sampler
+  // linear sampler for smooth texture sampling
   const sampler = device.createSampler({
     magFilter: 'linear',
     minFilter: 'linear',
@@ -190,11 +202,12 @@ async function init() {
     mipmapFilter: 'nearest'
   });
 
-  // bind resolution
+  // initialize resolution buffer with canvas dimensions
   const resolutionArray = new Float32Array([canvas.width, canvas.height]);
   device.queue.writeBuffer(resolutionBuffer, 0, resolutionArray);
 
-  // Funzione per creare bind group per il ping pong
+  // factory function to create bind groups for ping-pong rendering
+  // takes the previous frame's texture as input
   function createPingPongBindGroup(prevTextureView) {
     return device.createBindGroup({
       layout: blobPipeline.getBindGroupLayout(0),
@@ -209,7 +222,7 @@ async function init() {
         },
         {
           binding: 2,
-          resource: prevTextureView,
+          resource: prevTextureView, // previous frame for temporal effects
         },
         {
           binding: 3,
@@ -219,7 +232,7 @@ async function init() {
     });
   }
 
-  // Bind group per la copia finale
+  // factory function for copy pass bind group
   function createCopyBindGroup(textureView) {
     return device.createBindGroup({
       layout: copyPipeline.getBindGroupLayout(0),
@@ -236,15 +249,16 @@ async function init() {
     });
   }
 
-
+  // fps tracking variables
   let fps = 0;
   let fpsTime = 0;
-  let fpsCount =0 ;
-  // render
+  let fpsCount = 0;
+
+  // main render loop
   function render(time) {
+    time *= 1e-3; // convert to seconds
 
-    time *= 1e-3;
-
+    // fps calculation - updates every second
     fpsCount++;
     if (time - fpsTime > 1) {
       fps = fpsCount;
@@ -253,14 +267,14 @@ async function init() {
       document.getElementById('fps').textContent = `${fps}fps`;
     }
 
-    // update time
+    // update time uniform for shader animations
     const timeValue = new Float32Array([time]);
     device.queue.writeBuffer(timeBuffer, 0, timeValue);
 
     const commandEncoder = device.createCommandEncoder();
 
-    // raymarching pass
-
+    // first pass: raymarching to ping-pong buffer
+    // read from previous frame (1 - currentBuffer), write to current frame
     const pingPongBindGroup = createPingPongBindGroup(pingPongViews[1 - currentBuffer]);
 
     const pingPongPass = commandEncoder.beginRenderPass({
@@ -275,10 +289,10 @@ async function init() {
     });
     pingPongPass.setPipeline(blobPipeline);
     pingPongPass.setBindGroup(0, pingPongBindGroup);
-    pingPongPass.draw(3);
+    pingPongPass.draw(3); // draw fullscreen triangle
     pingPongPass.end();
 
-    // copy pass: to screen
+    // second pass: copy result to screen
     const copyBindGroup = createCopyBindGroup(pingPongViews[currentBuffer]);
 
     const copyPass = commandEncoder.beginRenderPass({
@@ -293,47 +307,53 @@ async function init() {
     });
     copyPass.setPipeline(copyPipeline);
     copyPass.setBindGroup(0, copyBindGroup);
-    copyPass.draw(3);
+    copyPass.draw(3); // another fullscreen triangle
     copyPass.end();
 
+    // submit all commands to GPU
     device.queue.submit([commandEncoder.finish()]);
 
-    // swap buffers
+    // swap ping-pong buffers for next frame
     currentBuffer = 1 - currentBuffer;
 
-    // next frame
+    // schedule next frame
     requestAnimationFrame(render);
   }
 
-  // resize canvas
+  // handle window resize - important for responsive rendering
   function resize() {
     const devicePixelRatio = window.devicePixelRatio || 1;
     const width = canvas.clientWidth * devicePixelRatio;
     const height = canvas.clientHeight * devicePixelRatio;
 
+    // update canvas size
     canvas.width = width;
     canvas.height = height;
 
+    // update resolution uniform
     const resolutionArray = new Float32Array([width, height]);
     device.queue.writeBuffer(resolutionBuffer, 0, resolutionArray);
 
-    // create ping-pong textures
+    // recreate ping-pong textures with new dimensions
     if (pingPongTextures) {
-      
+      // clean up old textures
       pingPongTextures[0].destroy();
       pingPongTextures[1].destroy();
 
+      // create new textures with updated size
       pingPongTextures = [
         createPingPongTexture(device, width, height, format),
         createPingPongTexture(device, width, height, format)
       ];
 
+      // update texture views
       pingPongViews = [
         pingPongTextures[0].createView(),
         pingPongTextures[1].createView()
       ];
     }
 
+    // reconfigure canvas context
     context.configure({
       device,
       size: [width, height],
@@ -342,15 +362,17 @@ async function init() {
     });
   }
 
+  // listen for window resize events
   window.addEventListener('resize', resize);
 
-  // trigger resize
+  // initial resize to set correct dimensions
   resize();
 
-  // start render loop
+  // kick off the render loop
   requestAnimationFrame(render);
 }
 
+// initialize everything and handle any setup errors
 init().catch((error) => {
   console.error('WebGPU:', error);
   document.body.innerHTML = `<p>Errore WebGPU: ${error.message}</p>`;
