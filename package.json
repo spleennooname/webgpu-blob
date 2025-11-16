@@ -3,6 +3,22 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "keywords": [
+    "webgpu",
+    "wgsl",
+    "graphics",
+    "gpu",
+    "compute-shaders",
+    "rendering",
+    "3d",
+    "graphics-programming",
+    "webgl",
+    "experimental",
+    "blob",
+    "animation",
+    "web-graphics",
+    "shaders"
+  ],
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",

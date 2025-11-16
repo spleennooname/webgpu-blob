@@ -1,6 +1,15 @@
 
 # webgpu-blob
 
+![Node.js Version](https://img.shields.io/node/v/vite)
+![npm Version](https://img.shields.io/npm/v/npm)
+![Build Status](https://img.shields.io/github/actions/workflow/status/spleennooname/webgpu-blob/build.yml)
+![License](https://img.shields.io/badge/license-CC%20BY--NC%204.0-blue)
+![WebGPU](https://img.shields.io/badge/WebGPU-enabled-green)
+![Browser Support](https://img.shields.io/badge/browsers-Chrome%20113%2B%20%7C%20Firefox%20119%2B%20%7C%20Safari%2017%2B-brightgreen)
+![Vite](https://img.shields.io/badge/built%20with-Vite-646CFF?logo=vite)
+![Demo](https://img.shields.io/badge/demo-live-success?logo=netlify)
+
 ![image](./webgpu.jpeg)
 
 This repository contains an experiment built with WebGPU and WGSL (WebGPU Shading Language).
@@ -16,15 +25,17 @@ This repository contains an experiment built with WebGPU and WGSL (WebGPU Shadin
 ### Enabling WebGPU
 
 - **Chrome/Edge**: No additional configuration needed in recent versions
- - For older versions or to force enable experimental features:
+- For older versions or to force enable experimental features:
    1. Navigate to `chrome://flags` or `edge://flags`
    2. Search for "WebGPU"
    3. Set "Unsafe WebGPU" to "Enabled"
    4. Restart your browser
-- **Firefox**: 
+- **Firefox**:
+
  1. Go to `about:config` in your browser
  2. Search for `dom.webgpu.enabled`
  3. Set it to `true`
+
 - **Safari**: Make sure you're using Safari 17 or newer
 
 ### Hardware Compatibility Check
@@ -54,16 +65,18 @@ Check out the [demo](https://webgpu-blob.netlify.app/) to see the experiment in 
 
 This work is licensed under a [Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0)](https://creativecommons.org/licenses/by-nc/4.0/).
 
-### What this means:
+### What this means
 
 - **Attribution** — You must give appropriate credit to [Andrea Bovo](https://github.com/spleennooname), provide a link to the license, and indicate if changes were made.
 - **NonCommercial** — You may not use this material for commercial purposes.
 
 You are free to:
+
 - Share — copy and redistribute the material in any medium or format
 - Adapt — remix, transform, and build upon the material
 
 Under these conditions:
+
 - You must provide proper attribution to [Andrea Bovo](https://github.com/spleennooname) as the original creator
 - You cannot use the material for commercial purposes
 - No additional restrictions — You may not apply legal terms or technological measures that legally restrict others from doing anything the license permits

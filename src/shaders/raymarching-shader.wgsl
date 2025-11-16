@@ -6,7 +6,7 @@ struct VertexOutput {
 
 @vertex
 fn vertexMain(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
-     // simple quad (big)triangle
+    // simple (big)triangle
     var pos = array<vec2f, 3>(
         vec2f(-1.0, -1.0),
         vec2f(3.0, -1.0),
@@ -126,8 +126,6 @@ fn trace(ro: vec3f, rd: vec3f) -> f32 {
 
   return t;
 }
-
-
 
 struct FragmentInput {
   @location(0) uv: vec2f, // same location(n), see VertexOutput
