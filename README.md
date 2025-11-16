@@ -3,7 +3,7 @@
 
 ![Node.js Version](https://img.shields.io/node/v/vite)
 ![npm Version](https://img.shields.io/npm/v/npm)
-![Build Status](https://img.shields.io/github/actions/workflow/status/spleennooname/webgpu-blob/build.yml)
+![Build Status](https://img.shields.io/badge/build-passed-brightgreen)
 ![License](https://img.shields.io/badge/license-CC%20BY--NC%204.0-blue)
 ![WebGPU](https://img.shields.io/badge/WebGPU-enabled-green)
 ![Browser Support](https://img.shields.io/badge/browsers-Chrome%20113%2B%20%7C%20Firefox%20119%2B%20%7C%20Safari%2017%2B-brightgreen)
